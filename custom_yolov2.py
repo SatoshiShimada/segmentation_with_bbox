@@ -8,15 +8,8 @@ from lib.utils import *
 from lib.functions import *
 
 class YOLOv2(Chain):
-
-    """
-    YOLOv2
-    - It takes (416, 416, 3) sized image as input
-    """
-
     def __init__(self, n_classes, n_boxes):
         super(YOLOv2, self).__init__(
-            ##### common layers for both pretrained layers and yolov2 #####
             conv1=L.Convolution2D(3, 64, 3, stride=1, pad=1),
             conv2=L.Convolution2D(None, 64, 3, stride=1, pad=1),
 
@@ -180,22 +173,6 @@ class YOLOv2Predictor(Chain):
 
             # debug prints
             maps = F.transpose(prob[batch], (2, 3, 1, 0)).data
-            """
-            print("best confidences and best conditional probability and predicted class of each grid:")
-            for i in range(grid_h):
-                for j in range(grid_w):
-                    print("%2d" % (int(conf[batch, :, :, i, j].data.max() * 100)), end=" ")
-                print("     ", end="")
-                for j in range(grid_w):
-                    print("%2d" % (maps[i][j][int(maps[i][j].max(axis=1).argmax())].argmax()), end=" ")
-                print("     ", end="")
-                for j in range(grid_w):
-                    print("%2d" % (maps[i][j][int(maps[i][j].max(axis=1).argmax())].max()*100), end=" ")
-                print()
-
-            print("best default iou: %.2f   predicted iou: %.2f   confidence: %.2f   class: %s" % (best_iou, predicted_iou, conf[batch][truth_n][0][truth_h][truth_w].data, t[batch][0]["label"]))
-            print("-------------------------------")
-            """
         print("seen = %d" % self.seen)
 
         # loss計算
@@ -245,3 +222,4 @@ class YOLOv2Predictor(Chain):
         box_h = F.exp(h) * h_anchor / grid_h
 
         return box_x, box_y, box_w, box_h, conf, prob
+

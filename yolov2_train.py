@@ -1,9 +1,5 @@
-import time
-import cv2
 import numpy as np
 import chainer
-import glob
-import os
 from chainer import serializers, optimizers, Variable, cuda
 import chainer.functions as F
 from custom_yolov2 import *
@@ -11,10 +7,10 @@ from lib.utils import *
 from lib.image_generator import *
 
 # hyper parameters
-#train_sizes = [320, 352, 384, 416, 448]
-item_path = "./items"
-background_path = "./backgrounds"
-initial_weight_file = "./backup/partial.model"
+gpu = 0
+image_list = "image_list"
+train_dataset = "/home/satoshi/2018_04_28/images/"
+target_dataset = "/home/satoshi/2018_04_28/labels/"
 backup_path = "backup"
 backup_file = "%s/backup.model" % (backup_path)
 batch_size = 16
@@ -30,12 +26,12 @@ learning_schedules = {
 lr_decay_power = 4
 momentum = 0.9
 weight_decay = 0.005
-n_classes = 10
+n_classes = 2
 n_boxes = 5
 
 # load image generator
 print("loading image generator...")
-generator = ImageGenerator(item_path, background_path)
+generator = ImageGenerator(image_list, train_dataset, target_dataset)
 
 # load model
 print("loading initial model...")
@@ -45,49 +41,28 @@ model = YOLOv2Predictor(yolov2)
 
 model.predictor.train = True
 model.predictor.finetune = False
-cuda.get_device(0).use()
+cuda.get_device(gpu).use()
 model.to_gpu()
 
 optimizer = optimizers.MomentumSGD(lr=learning_rate, momentum=momentum)
 optimizer.use_cleargrads()
 optimizer.setup(model)
-#optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
+optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
 
 # start to train
 print("start training")
 for batch in range(max_batches):
     if str(batch) in learning_schedules:
         optimizer.lr = learning_schedules[str(batch)]
-    input_width, input_height = 640, 480
-    #if batch % 80 == 0:
-        #input_width = input_height = train_sizes[np.random.randint(len(train_sizes))]
 
     # generate sample
-    x, t = generator.generate_samples(
-        n_samples=16
-    )
-    """
-    x, t = generator.generate_samples(
-        n_samples=16,
-        n_items=3,
-        crop_width=input_width,
-        crop_height=input_height,
-        min_item_scale=0.5,
-        max_item_scale=2.5,
-        rand_angle=15,
-        minimum_crop=0.8,
-        delta_hue=0.01,
-        delta_sat_scale=0.5,
-        delta_val_scale=0.5
-    )
-    """
+    x, t = generator.generate_samples(batch_size)
     x = Variable(x)
     x.to_gpu()
 
     # forward
     loss = model(x, t)
-    print("batch: %d     input size: %dx%d     learning rate: %f    loss: %f" % (batch, input_height, input_width, optimizer.lr, loss.data))
-    print("/////////////////////////////////////")
+    print("batch: %d lr: %f loss: %f" % (batch, optimizer.lr, loss.data))
 
     # backward and optimize
     #optimizer.zero_grads()
@@ -107,3 +82,4 @@ serializers.save_hdf5("%s/yolov2_final.model" % (backup_path), model)
 
 model.to_cpu()
 serializers.save_hdf5("%s/yolov2_final_cpu.model" % (backup_path), model)
+

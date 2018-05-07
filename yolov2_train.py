@@ -14,7 +14,8 @@ target_dataset = "/home/satoshi/2018_04_28/labels/"
 backup_path = "backup"
 backup_file = "%s/backup.model" % (backup_path)
 batch_size = 16
-max_batches = 30000
+yolo_max_batches = 30000
+fcn_max_batches = 3000
 learning_rate = 1e-5
 learning_schedules = { 
     "0"    : 1e-5,
@@ -49,33 +50,31 @@ optimizer.use_cleargrads()
 optimizer.setup(model)
 optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
 
-# start to train
-print("start training")
-for batch in range(max_batches):
+# start to train YOLO
+for batch in range(yolo_max_batches):
     if str(batch) in learning_schedules:
         optimizer.lr = learning_schedules[str(batch)]
 
-    # generate sample
     x, t = generator.generate_samples(batch_size)
     x = Variable(x)
     x.to_gpu()
 
-    # forward
-    loss = model(x, t)
+    loss = model(x, t, train=True)
     print("batch: %d lr: %f loss: %f" % (batch, optimizer.lr, loss.data))
-
-    # backward and optimize
     #optimizer.zero_grads()
     model.cleargrads()
     loss.backward()
     optimizer.update()
 
-    # save model
-    if (batch+1) % 500 == 0:
-        model_file = "%s/%s.model" % (backup_path, batch+1)
-        print("saving model to %s" % (model_file))
-        serializers.save_hdf5(model_file, model)
-        serializers.save_hdf5(backup_file, model)
+# start to train FCN
+for batch in range(yolo_max_batches):
+    x, t = generator.generate_samples(batch_size)
+    x = Variable(x)
+    x.to_gpu()
+    loss = model(x, t, train=True)
+    print("batch: %d lr: %f loss: %f" % (batch, optimizer.lr, loss.data))
+    loss.backward()
+    optimizer.update()
 
 print("saving model to %s/yolov2_final.model" % (backup_path))
 serializers.save_hdf5("%s/yolov2_final.model" % (backup_path), model)

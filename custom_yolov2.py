@@ -43,7 +43,7 @@ class YOLOv2(Chain):
         self.n_boxes = n_boxes
         self.n_classes = n_classes
 
-    def __call__(self, x):
+    def __call__(self, x, train=False):
         h = F.relu(self.conv2(F.relu(self.conv1(x))))
         h = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
         h = F.relu(self.conv4(F.relu(self.conv3(h))))
@@ -64,8 +64,15 @@ class YOLOv2(Chain):
 
         o2 = self.conv14(p5)
 
-        #return o1
         return o2
+        """
+        if train:
+            loss = F.softmax_cross_entropy(o1, t)
+            return loss
+        else:
+            pred = F.softmax(o1)
+            return pred
+        """
 
 class YOLOv2Predictor(Chain):
     def __init__(self, predictor):
@@ -75,7 +82,7 @@ class YOLOv2Predictor(Chain):
         self.seen = 0
         self.unstable_seen = 5000
 
-    def __call__(self, input_x, t):
+    def __call__(self, input_x, t, train=False):
         output = self.predictor(input_x)
         batch_size, _, grid_h, grid_w = output.shape
         self.seen += batch_size

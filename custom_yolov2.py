@@ -8,42 +8,41 @@ from lib.utils import *
 from lib.functions import *
 
 class YOLOv2(Chain):
-    def __init__(self, n_classes, n_boxes):
+    def __init__(self, n_classes_fcn, n_classes_yolo, n_boxes):
         super(YOLOv2, self).__init__(
             conv1=L.Convolution2D(3, 64, 3, stride=1, pad=1),
             conv2=L.Convolution2D(None, 64, 3, stride=1, pad=1),
 
-            conv3=L.Convolution2D(None, 64, 3, stride=1, pad=1),
-            conv4=L.Convolution2D(None, 64, 3, stride=1, pad=1),
+            conv3=L.Convolution2D(None, 128, 3, stride=1, pad=1),
+            conv4=L.Convolution2D(None, 128, 3, stride=1, pad=1),
 
-            conv5=L.Convolution2D(None, 64, 3, stride=1, pad=1),
-            conv6=L.Convolution2D(None, 64, 3, stride=1, pad=1),
-            conv7=L.Convolution2D(None, 64, 3, stride=1, pad=1),
+            conv5=L.Convolution2D(None, 256, 3, stride=1, pad=1),
+            conv6=L.Convolution2D(None, 256, 3, stride=1, pad=1),
+            conv7=L.Convolution2D(None, 256, 3, stride=1, pad=1),
 
-            conv8=L.Convolution2D(None, 64, 3, stride=1, pad=1),
-            conv9=L.Convolution2D(None, 64, 3, stride=1, pad=1),
-            conv10=L.Convolution2D(None, 64, 3, stride=1, pad=1),
+            conv8=L.Convolution2D(None, 512, 3, stride=1, pad=1),
+            conv9=L.Convolution2D(None, 512, 3, stride=1, pad=1),
+            conv10=L.Convolution2D(None, 512, 3, stride=1, pad=1),
 
-            conv11=L.Convolution2D(None, 64, 3, stride=1, pad=1),
-            conv12=L.Convolution2D(None, 64, 3, stride=1, pad=1),
-            conv13=L.Convolution2D(None, 64, 3, stride=1, pad=1),
+            conv11=L.Convolution2D(None, 512, 3, stride=1, pad=1),
+            conv12=L.Convolution2D(None, 512, 3, stride=1, pad=1),
+            conv13=L.Convolution2D(None, 512, 3, stride=1, pad=1),
 
-            pool1=L.Convolution2D(None, n_classes, 1, stride=1, pad=0),
-            pool2=L.Convolution2D(None, n_classes, 1, stride=1, pad=0),
-            pool3=L.Convolution2D(None, n_classes, 1, stride=1, pad=0),
+            pool1=L.Convolution2D(None, n_classes_fcn, 1, stride=1, pad=0),
+            pool2=L.Convolution2D(None, n_classes_fcn, 1, stride=1, pad=0),
+            pool3=L.Convolution2D(None, n_classes_fcn, 1, stride=1, pad=0),
 
-            upsample1=L.Deconvolution2D(n_classes, n_classes, ksize=4, stride=2, pad=1),
-            upsample2=L.Deconvolution2D(n_classes, n_classes, ksize=8, stride=4, pad=2),
-            upsample3=L.Deconvolution2D(n_classes, n_classes, ksize=16, stride=8, pad=4),
+            upsample1=L.Deconvolution2D(None, n_classes_fcn, ksize=4, stride=2, pad=1),
+            upsample2=L.Deconvolution2D(None, n_classes_fcn, ksize=8, stride=4, pad=2),
+            upsample3=L.Deconvolution2D(None, n_classes_fcn, ksize=16, stride=8, pad=4),
 
-            conv14=L.Convolution2D(None, n_boxes * (5 + n_classes), ksize=1, stride=1, pad=0),
+            conv14=L.Convolution2D(None, n_boxes * (5 + n_classes_yolo), ksize=1, stride=1, pad=0),
         )
-        self.train = False
-        self.finetune = False
         self.n_boxes = n_boxes
-        self.n_classes = n_classes
+        self.n_classes_fcn = n_classes_fcn
+        self.n_classes_yolo = n_classes_yolo
 
-    def __call__(self, x, train=False):
+    def __call__(self, x, FCN=True):
         h = F.relu(self.conv2(F.relu(self.conv1(x))))
         h = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
         h = F.relu(self.conv4(F.relu(self.conv3(h))))
@@ -62,17 +61,13 @@ class YOLOv2(Chain):
         h = u3 + u4 + u5
         o1 = self.upsample3(h)
 
+        #p5.unchain.backward()
         o2 = self.conv14(p5)
 
-        return o2
-        """
-        if train:
-            loss = F.softmax_cross_entropy(o1, t)
-            return loss
+        if FCN:
+            return o1
         else:
-            pred = F.softmax(o1)
-            return pred
-        """
+            return o2
 
 class YOLOv2Predictor(Chain):
     def __init__(self, predictor):
@@ -82,11 +77,18 @@ class YOLOv2Predictor(Chain):
         self.seen = 0
         self.unstable_seen = 5000
 
-    def __call__(self, input_x, t, train=False):
-        output = self.predictor(input_x)
+    def __call__(self, input_x, t, FCN=True, train=False):
+        output = self.predictor(input_x, FCN=FCN)
+        if FCN:
+            if train:
+                loss = F.softmax_corss_entropy(output, t)
+                return loss
+            else:
+                loss = F.softmax(output)
+                return loss
         batch_size, _, grid_h, grid_w = output.shape
         self.seen += batch_size
-        x, y, w, h, conf, prob = F.split_axis(F.reshape(output, (batch_size, self.predictor.n_boxes, self.predictor.n_classes+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
+        x, y, w, h, conf, prob = F.split_axis(F.reshape(output, (batch_size, self.predictor.n_boxes, self.predictor.n_classes_yolo+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
         x = F.sigmoid(x) # xのactivation
         y = F.sigmoid(y) # yのactivation
         conf = F.sigmoid(conf) # confのactivation
@@ -205,28 +207,32 @@ class YOLOv2Predictor(Chain):
     def init_anchor(self, anchors):
         self.anchors = anchors
 
-    def predict(self, input_x):
+    def predict(self, input_x, FCN=True):
         output = self.predictor(input_x)
-        batch_size, input_channel, input_h, input_w = input_x.shape
-        batch_size, _, grid_h, grid_w = output.shape
-        x, y, w, h, conf, prob = F.split_axis(F.reshape(output, (batch_size, self.predictor.n_boxes, self.predictor.n_classes+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
-        x = F.sigmoid(x) # xのactivation
-        y = F.sigmoid(y) # yのactivation
-        conf = F.sigmoid(conf) # confのactivation
-        prob = F.transpose(prob, (0, 2, 1, 3, 4))
-        prob = F.softmax(prob) # probablitiyのacitivation
-        prob = F.transpose(prob, (0, 2, 1, 3, 4))
+        if FCN:
+            loss = F.softmax(output)
+            return loss
+        else:
+            batch_size, input_channel, input_h, input_w = input_x.shape
+            batch_size, _, grid_h, grid_w = output.shape
+            x, y, w, h, conf, prob = F.split_axis(F.reshape(output, (batch_size, self.predictor.n_boxes, self.predictor.n_classes_yolo+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
+            x = F.sigmoid(x) # xのactivation
+            y = F.sigmoid(y) # yのactivation
+            conf = F.sigmoid(conf) # confのactivation
+            prob = F.transpose(prob, (0, 2, 1, 3, 4))
+            prob = F.softmax(prob) # probablitiyのacitivation
+            prob = F.transpose(prob, (0, 2, 1, 3, 4))
 
-        # x, y, w, hを絶対座標へ変換
-        x_shift = Variable(np.broadcast_to(np.arange(grid_w, dtype=np.float32), x.shape))
-        y_shift = Variable(np.broadcast_to(np.arange(grid_h, dtype=np.float32).reshape(grid_h, 1), y.shape))
-        w_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 0], (self.predictor.n_boxes, 1, 1, 1)), w.shape))
-        h_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 1], (self.predictor.n_boxes, 1, 1, 1)), h.shape))
-        #x_shift.to_gpu(), y_shift.to_gpu(), w_anchor.to_gpu(), h_anchor.to_gpu()
-        box_x = (x + x_shift) / grid_w
-        box_y = (y + y_shift) / grid_h
-        box_w = F.exp(w) * w_anchor / grid_w
-        box_h = F.exp(h) * h_anchor / grid_h
+            # x, y, w, hを絶対座標へ変換
+            x_shift = Variable(np.broadcast_to(np.arange(grid_w, dtype=np.float32), x.shape))
+            y_shift = Variable(np.broadcast_to(np.arange(grid_h, dtype=np.float32).reshape(grid_h, 1), y.shape))
+            w_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 0], (self.predictor.n_boxes, 1, 1, 1)), w.shape))
+            h_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 1], (self.predictor.n_boxes, 1, 1, 1)), h.shape))
+            #x_shift.to_gpu(), y_shift.to_gpu(), w_anchor.to_gpu(), h_anchor.to_gpu()
+            box_x = (x + x_shift) / grid_w
+            box_y = (y + y_shift) / grid_h
+            box_w = F.exp(w) * w_anchor / grid_w
+            box_h = F.exp(h) * h_anchor / grid_h
 
-        return box_x, box_y, box_w, box_h, conf, prob
+            return box_x, box_y, box_w, box_h, conf, prob
 

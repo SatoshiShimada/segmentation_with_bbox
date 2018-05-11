@@ -20,31 +20,60 @@ def load_data(path, mode="label"):
         x = np.asarray(img, dtype=np.float32).transpose(2, 0, 1) / 255.0
         return x
 
-class ImageGenerator(object):
-    def __init__(self, image_list, image_path, label_path, n_classes=2, image_size=(640, 480)):
-        self.image_list = image_list
-        self.image_path = image_path
-        self.label_path = label_path
-        self.n_classes = n_classes
-        self.image_size = image_size
-        with open(self.image_list, 'r') as fp:
+class DataSetFCN(object):
+    def __init__(self):
+        self.image_size = (640, 480)
+        self.train_dataset = "/home/satoshi/fcn/segd/gain/exact/images"
+        self.target_dataset = "/home/satoshi/fcn/segd/gain/exact/labels"
+        image_list = "image_list"
+        with open(image_list, 'r') as fp:
             names = fp.readlines()
-        data = []
+        self.data = []
         for name in names:
             name = name.replace('\n', '')
-            xpath = train_dataset + name + ".jpg"
-            ypath = target_dataset + name + ".txt"
-            data.append((xpath, ypath))
-        self.num_data = len(data)
+            xpath = self.train_dataset + name + ".png"
+            ypath = self.target_dataset + name + ".png"
+            self.data.append((xpath, ypath))
+        self.num_data = len(self.data)
 
-    def generate_samples(self, batchsize):
+    def get_sample(self, batchsize):
+        image_width, image_height = self.image_size
+        xp = np
+        x = xp.zeros((batchsize, 3, image_height, image_width), dtype=np.float32)
+        y = xp.zeros((batchsize, image_height, image_width), dtype=np.int32)
+        for b in range(batchsize):
+            i = np.random.choice(range(self.num_data))
+            xpath, ypath = self.data[i]
+            x[b] = load_data(xpath, mode="data")
+            y[b] = load_data(ypath, mode="label_fcn")
+        x = np.array(x)
+        y = np.array(y)
+        return x, y
+
+class DataSetYOLO(object):
+    def __init__(self):
+        self.image_size = (640, 480)
+        self.train_dataset = "/home/satoshi/2018_04_28/images/"
+        self.target_dataset = "/home/satoshi/2018_04_28/labels/"
+        image_list = "image_list"
+        with open(image_list, 'r') as fp:
+            names = fp.readlines()
+        self.data = []
+        for name in names:
+            name = name.replace('\n', '')
+            xpath = self.train_dataset + name + ".jpg"
+            ypath = self.target_dataset + name + ".txt"
+            self.data.append((xpath, ypath))
+        self.num_data = len(self.data)
+
+    def get_sample(self, batchsize):
         image_width, image_height = self.image_size
         xp = np
         x = xp.zeros((batchsize, 3, image_height, image_width), dtype=np.float32)
         y = []
-        #y = xp.zeros((batchsize, self.n_classes, image_height, image_width), dtype=np.float32)
         for b in range(batchsize):
-            i = np.random.choice(range(len(names)))
+            i = np.random.choice(range(self.num_data))
+            xpath, ypath = self.data[i]
             x[b] = load_data(xpath, mode="data")
             ts = load_data(ypath, mode="label_yolo")
             ground_truth = []

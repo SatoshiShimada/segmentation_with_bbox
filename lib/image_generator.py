@@ -4,6 +4,7 @@ from lib.utils import *
 
 def load_data(path, mode="label"):
     if mode == "label_fcn":
+        img = Image.open(path)
         y = np.asarray(img, dtype=np.int32)
         y[y == 255] = -1
         return y
@@ -23,9 +24,9 @@ def load_data(path, mode="label"):
 class DataSetFCN(object):
     def __init__(self):
         self.image_size = (640, 480)
-        self.train_dataset = "/home/satoshi/fcn/segd/gain/exact/images"
-        self.target_dataset = "/home/satoshi/fcn/segd/gain/exact/labels"
-        image_list = "image_list"
+        self.train_dataset = "/home/satoshi/chainer_fcn2/exact/images/"
+        self.target_dataset = "/home/satoshi/chainer_fcn2/exact/labels/"
+        image_list = "image_list_fcn"
         with open(image_list, 'r') as fp:
             names = fp.readlines()
         self.data = []

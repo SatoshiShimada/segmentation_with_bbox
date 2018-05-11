@@ -7,10 +7,10 @@ from lib.utils import *
 from lib.image_generator import *
 
 # hyper parameters
-gpu = 0
+gpu = 1
 backup_path = "backup"
 backup_file = "%s/backup.model" % (backup_path)
-batch_size = 6
+batch_size = 5
 learning_rate = 1e-5
 lr_decay_power = 4
 momentum = 0.9
@@ -19,12 +19,12 @@ n_classes = 2
 n_boxes = 5
 
 # FCN
-fcn_max_batches = 3000
+fcn_max_batches = 0
 n_classes_fcn = 7
 
 #YOLO
+yolo_max_batches = 3000
 n_classes_yolo = 2
-yolo_max_batches = 30000
 
 # load image generator
 print("loading image generator...")
@@ -62,14 +62,14 @@ for batch in range(yolo_max_batches):
     optimizer.update()
 
 # start to train FCN
-for batch in range(yolo_max_batches):
+for batch in range(fcn_max_batches):
     model.cleargrads()
     x, t = data_fcn.get_sample(batch_size)
     x = Variable(x)
     t = Variable(t)
     if gpu >= 0:
         x.to_gpu()
-        y.to_gpu()
+        t.to_gpu()
     loss = model(x, t, train=True, FCN=True)
     print("batch: %d lr: %f loss: %f" % (batch, optimizer.lr, loss.data))
     loss.backward()

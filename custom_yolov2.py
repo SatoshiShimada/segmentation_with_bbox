@@ -127,7 +127,7 @@ class YOLOv2Predictor(Chain):
         self.seen = 0
         self.unstable_seen = 5000
 
-    def __call__(self, input_x, t, FCN=True, train=False):
+    def __call__(self, input_x, t, FCN=False, train=False):
         output = self.predictor(input_x, FCN=FCN, train=train)
         if FCN:
             if train:
@@ -170,7 +170,8 @@ class YOLOv2Predictor(Chain):
         x_shift.to_gpu(), y_shift.to_gpu(), w_anchor.to_gpu(), h_anchor.to_gpu()
         best_ious = []
         for batch in range(batch_size):
-            n_truth_boxes = len(t[batch])
+            #n_truth_boxes = len(t[batch])
+            n_truth_boxes = int(sum( x[0] != 10.0 for x in t[batch])) # ??
             box_x = (x[batch] + x_shift) / grid_w
             box_y = (y[batch] + y_shift) / grid_h
             box_w = F.exp(w[batch]) * w_anchor / grid_w
@@ -178,10 +179,11 @@ class YOLOv2Predictor(Chain):
 
             ious = []
             for truth_index in range(n_truth_boxes):
-                truth_box_x = Variable(np.broadcast_to(np.array(t[batch][truth_index]["x"], dtype=np.float32), box_x.shape))
-                truth_box_y = Variable(np.broadcast_to(np.array(t[batch][truth_index]["y"], dtype=np.float32), box_y.shape))
-                truth_box_w = Variable(np.broadcast_to(np.array(t[batch][truth_index]["w"], dtype=np.float32), box_w.shape))
-                truth_box_h = Variable(np.broadcast_to(np.array(t[batch][truth_index]["h"], dtype=np.float32), box_h.shape))
+                t = chainer.cuda.to_cpu(t) # ??
+                truth_box_x = Variable(np.broadcast_to(np.array(t[batch][truth_index][1], dtype=np.float32), box_x.shape))
+                truth_box_y = Variable(np.broadcast_to(np.array(t[batch][truth_index][2], dtype=np.float32), box_y.shape))
+                truth_box_w = Variable(np.broadcast_to(np.array(t[batch][truth_index][3], dtype=np.float32), box_w.shape))
+                truth_box_h = Variable(np.broadcast_to(np.array(t[batch][truth_index][4], dtype=np.float32), box_h.shape))
                 truth_box_x.to_gpu(), truth_box_y.to_gpu(), truth_box_w.to_gpu(), truth_box_h.to_gpu()
                 ious.append(multi_box_iou(Box(box_x, box_y, box_w, box_h), Box(truth_box_x, truth_box_y, truth_box_w, truth_box_h)).data.get())  
             if ious:
@@ -199,27 +201,29 @@ class YOLOv2Predictor(Chain):
         abs_anchors = self.anchors / np.array([grid_w, grid_h])
         for batch in range(batch_size):
             for truth_box in t[batch]:
-                truth_w = int(float(truth_box["x"]) * grid_w)
-                truth_h = int(float(truth_box["y"]) * grid_h)
+                if truth_box[0] == 10.0: # ??
+                    continue
+                truth_w = int(float(truth_box[1]) * grid_w)
+                truth_h = int(float(truth_box[2]) * grid_h)
                 truth_n = 0
                 best_iou = 0.0
                 for anchor_index, abs_anchor in enumerate(abs_anchors):
-                    iou = box_iou(Box(0, 0, float(truth_box["w"]), float(truth_box["h"])), Box(0, 0, abs_anchor[0], abs_anchor[1]))
+                    iou = box_iou(Box(0, 0, float(truth_box[3]), float(truth_box[4])), Box(0, 0, abs_anchor[0], abs_anchor[1]))
                     if best_iou < iou:
                         best_iou = iou
                         truth_n = anchor_index
 
                 # objectの存在するanchorについて、centerを0.5ではなく、真の座標に近づかせる。anchorのスケールを1ではなく真のスケールに近づかせる。学習スケールを1にする。
                 box_learning_scale[batch, truth_n, :, truth_h, truth_w] = 1.0 
-                tx[batch, truth_n, :, truth_h, truth_w] = float(truth_box["x"]) * grid_w - truth_w 
-                ty[batch, truth_n, :, truth_h, truth_w] = float(truth_box["y"]) * grid_h - truth_h
-                tw[batch, truth_n, :, truth_h, truth_w] = np.log(float(truth_box["w"]) / abs_anchors[truth_n][0])
-                th[batch, truth_n, :, truth_h, truth_w] = np.log(float(truth_box["h"]) / abs_anchors[truth_n][1])
+                tx[batch, truth_n, :, truth_h, truth_w] = float(truth_box[1]) * grid_w - truth_w 
+                ty[batch, truth_n, :, truth_h, truth_w] = float(truth_box[2]) * grid_h - truth_h
+                tw[batch, truth_n, :, truth_h, truth_w] = np.log(float(truth_box[3]) / abs_anchors[truth_n][0])
+                th[batch, truth_n, :, truth_h, truth_w] = np.log(float(truth_box[4]) / abs_anchors[truth_n][1])
                 tprob[batch, :, truth_n, truth_h, truth_w] = 0
-                tprob[batch, int(truth_box["label"]), truth_n, truth_h, truth_w] = 1
+                tprob[batch, int(truth_box[0]), truth_n, truth_h, truth_w] = 1
 
                 # IOUの観測
-                full_truth_box = Box(float(truth_box["x"]), float(truth_box["y"]), float(truth_box["w"]), float(truth_box["h"]))
+                full_truth_box = Box(float(truth_box[1]), float(truth_box[2]), float(truth_box[3]), float(truth_box[4]))
                 predicted_box = Box(
                     (x[batch][truth_n][0][truth_h][truth_w].data.get() + truth_w) / grid_w, 
                     (y[batch][truth_n][0][truth_h][truth_w].data.get() + truth_h) / grid_h,
@@ -257,8 +261,8 @@ class YOLOv2Predictor(Chain):
     def init_anchor(self, anchors):
         self.anchors = anchors
 
-    def predict(self, input_x, FCN=True):
-        output = self.predictor(input_x)
+    def predict(self, input_x, FCN=False):
+        output = self.predictor(input_x, FCN)
         if FCN:
             loss = F.softmax(output)
             return loss

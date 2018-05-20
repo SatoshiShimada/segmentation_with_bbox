@@ -262,7 +262,7 @@ class YOLOv2Predictor(Chain):
         self.anchors = anchors
 
     def predict(self, input_x, FCN=False):
-        output = self.predictor(input_x, FCN=FCN train=False)
+        output = self.predictor(input_x, FCN=FCN, train=False)
         if FCN:
             loss = F.softmax(output)
             return loss

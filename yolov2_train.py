@@ -50,15 +50,15 @@ if gpu >= 0:
     model.to_gpu()
 
 #optimizer = optimizers.MomentumSGD(lr=learning_rate, momentum=momentum)
-optimizer = optimizers.Adam(alpha=learning_rate)
+optimizer = optimizers.Adam()
 optimizer.use_cleargrads()
 optimizer.setup(model)
 optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
 
 # start to train YOLO
 for batch in range(yolo_max_batches):
-    if str(batch) in learning_schedules_yolo:
-        optimizer.alpha = learning_schedules_yolo[str(batch)]
+    #if str(batch) in learning_schedules_yolo:
+    #    optimizer.lr = learning_schedules_yolo[str(batch)]
     model.cleargrads()
     x, t = data_yolo.get_sample(batch_size_yolo)
     x = Variable(x)
@@ -77,8 +77,8 @@ for batch in range(yolo_max_batches):
 
 # start to train FCN
 for batch in range(fcn_max_batches):
-    if str(batch) in learning_schedules_fcn:
-        optimizer.alpha = learning_schedules_fcn[str(batch)]
+    #if str(batch) in learning_schedules_fcn:
+    #    optimizer.lr = learning_schedules_fcn[str(batch)]
     model.cleargrads()
     x, t = data_fcn.get_sample(batch_size_fcn)
     x = Variable(x)

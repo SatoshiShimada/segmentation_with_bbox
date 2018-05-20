@@ -1,32 +1,61 @@
 # coding: utf-8
 import numpy as np
+import chainer
 from chainer import cuda, Function, gradient_check, Variable, optimizers, serializers, utils
 from chainer import Link, Chain, ChainList
 import chainer.links as L
 import chainer.functions as F
-from lib.utils import *
-from lib.functions import *
+from lib.utils import multi_box_iou
+from lib.utils import Box
+from lib.utils import box_iou
+from lib.functions import reorg
 
 class YOLOv2(Chain):
     def __init__(self, n_classes_fcn, n_classes_yolo, n_boxes):
         super(YOLOv2, self).__init__(
-            conv1=L.Convolution2D(3, 64, 3, stride=1, pad=1),
-            conv2=L.Convolution2D(None, 64, 3, stride=1, pad=1),
+            conv1=L.Convolution2D(3, 64, 3, stride=1, pad=1, nobias=True),
+            bn1=L.BatchNormalization(64, use_beta=False, eps=2e-5),
+            bias1=L.Bias(shape=(64,)),
+            conv2=L.Convolution2D(None, 64, 3, stride=1, pad=1, nobias=True),
+            bn2=L.BatchNormalization(64, use_beta=False, eps=2e-5),
+            bias2=L.Bias(shape=(64,)),
 
-            conv3=L.Convolution2D(None, 128, 3, stride=1, pad=1),
-            conv4=L.Convolution2D(None, 128, 3, stride=1, pad=1),
+            conv3=L.Convolution2D(None, 128, 3, stride=1, pad=1, nobias=True),
+            bn3=L.BatchNormalization(128, use_beta=False, eps=2e-5),
+            bias3=L.Bias(shape=(128,)),
+            conv4=L.Convolution2D(None, 128, 3, stride=1, pad=1, nobias=True),
+            bn4=L.BatchNormalization(128, use_beta=False, eps=2e-5),
+            bias4=L.Bias(shape=(128,)),
 
-            conv5=L.Convolution2D(None, 256, 3, stride=1, pad=1),
-            conv6=L.Convolution2D(None, 256, 3, stride=1, pad=1),
-            conv7=L.Convolution2D(None, 256, 3, stride=1, pad=1),
+            conv5=L.Convolution2D(None, 256, 3, stride=1, pad=1, nobias=True),
+            bn5=L.BatchNormalization(256, use_beta=False, eps=2e-5),
+            bias5=L.Bias(shape=(256,)),
+            conv6=L.Convolution2D(None, 256, 3, stride=1, pad=1, nobias=True),
+            bn6=L.BatchNormalization(256, use_beta=False, eps=2e-5),
+            bias6=L.Bias(shape=(256,)),
+            conv7=L.Convolution2D(None, 256, 3, stride=1, pad=1, nobias=True),
+            bn7=L.BatchNormalization(256, use_beta=False, eps=2e-5),
+            bias7=L.Bias(shape=(256,)),
 
-            conv8=L.Convolution2D(None, 512, 3, stride=1, pad=1),
-            conv9=L.Convolution2D(None, 512, 3, stride=1, pad=1),
-            conv10=L.Convolution2D(None, 512, 3, stride=1, pad=1),
+            conv8=L.Convolution2D(None, 512, 3, stride=1, pad=1, nobias=True),
+            bn8=L.BatchNormalization(512, use_beta=False, eps=2e-5),
+            bias8=L.Bias(shape=(512,)),
+            conv9=L.Convolution2D(None, 512, 3, stride=1, pad=1, nobias=True),
+            bn9=L.BatchNormalization(512, use_beta=False, eps=2e-5),
+            bias9=L.Bias(shape=(512,)),
+            conv10=L.Convolution2D(None, 512, 3, stride=1, pad=1, nobias=True),
+            bn10=L.BatchNormalization(512, use_beta=False, eps=2e-5),
+            bias10=L.Bias(shape=(512,)),
 
-            conv11=L.Convolution2D(None, 512, 3, stride=1, pad=1),
-            conv12=L.Convolution2D(None, 512, 3, stride=1, pad=1),
-            conv13=L.Convolution2D(None, 512, 3, stride=1, pad=1),
+            conv11=L.Convolution2D(None, 512, 3, stride=1, pad=1, nobias=True),
+            bn11=L.BatchNormalization(512, use_beta=False, eps=2e-5),
+            bias11=L.Bias(shape=(512,)),
+            conv12=L.Convolution2D(None, 512, 3, stride=1, pad=1, nobias=True),
+            bn12=L.BatchNormalization(512, use_beta=False, eps=2e-5),
+            bias12=L.Bias(shape=(512,)),
+            conv13=L.Convolution2D(None, 512, 3, stride=1, pad=1, nobias=True),
+            bn13=L.BatchNormalization(512, use_beta=False, eps=2e-5),
+            bias13=L.Bias(shape=(512,)),
 
             pool1=L.Convolution2D(None, n_classes_fcn, 1, stride=1, pad=0),
             pool2=L.Convolution2D(None, n_classes_fcn, 1, stride=1, pad=0),
@@ -36,38 +65,59 @@ class YOLOv2(Chain):
             upsample2=L.Deconvolution2D(None, n_classes_fcn, ksize=8, stride=4, pad=2),
             upsample3=L.Deconvolution2D(None, n_classes_fcn, ksize=16, stride=8, pad=4),
 
-            conv14=L.Convolution2D(None, n_boxes * (5 + n_classes_yolo), ksize=1, stride=1, pad=0),
+            conv14=L.Convolution2D(None, 1024, 3, stride=1, pad=1, nobias=True),
+            bn14=L.BatchNormalization(1024, use_beta=False, eps=2e-5),
+            bias14=L.Bias(shape=(1024,)),
+
+            conv15=L.Convolution2D(None, n_boxes * (5 + n_classes_yolo), ksize=1, stride=1, pad=0),
         )
         self.n_boxes = n_boxes
         self.n_classes_fcn = n_classes_fcn
         self.n_classes_yolo = n_classes_yolo
+        self.finetune = False
 
-    def __call__(self, x, FCN=True):
-        h = F.relu(self.conv2(F.relu(self.conv1(x))))
+    def __call__(self, x, FCN=True, train=False):
+        chainer.using_config('train', train)
+        h = F.relu(self.bias1(self.bn1(self.conv1(x), finetune=self.finetune)))
+        h = F.relu(self.bias2(self.bn2(self.conv2(h), finetune=self.finetune)))
         h = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
-        h = F.relu(self.conv4(F.relu(self.conv3(h))))
+
+        h = F.relu(self.bias3(self.bn3(self.conv3(h), finetune=self.finetune)))
+        h = F.relu(self.bias4(self.bn4(self.conv4(h), finetune=self.finetune)))
         h = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
-        h = F.relu(self.conv7(F.relu(self.conv6(F.relu(self.conv5(h))))))
+
+        h = F.relu(self.bias5(self.bn5(self.conv5(h), finetune=self.finetune)))
+        h = F.relu(self.bias6(self.bn6(self.conv6(h), finetune=self.finetune)))
+        h = F.relu(self.bias7(self.bn7(self.conv7(h), finetune=self.finetune)))
         p3 = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
-        h = F.relu(self.conv10(F.relu(self.conv9(F.relu(self.conv8(p3))))))
+
+        h = F.relu(self.bias8(self.bn8(self.conv8(p3), finetune=self.finetune)))
+        h = F.relu(self.bias9(self.bn9(self.conv9(h), finetune=self.finetune)))
+        h = F.relu(self.bias10(self.bn10(self.conv10(h), finetune=self.finetune)))
+        high_resolution_feature = reorg(h)
         p4 = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
-        h = F.relu(self.conv13(F.relu(self.conv12(F.relu(self.conv11(p4))))))
-        p5 = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
+
+        h = F.relu(self.bias11(self.bn11(self.conv11(p4), finetune=self.finetune)))
+        h = F.relu(self.bias12(self.bn12(self.conv12(h), finetune=self.finetune)))
+        h = F.relu(self.bias13(self.bn13(self.conv13(h), finetune=self.finetune)))
+        #p5 = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
+
+        #h.unchain.backward()
+        h = F.concat((high_resolution_feature, h), axis=1)
+        h = F.relu(self.bias14(self.bn14(self.conv14(h), finetune=self.finetune)))
+        o_yolo = self.conv15(h)
 
         u3 = self.pool1(p3)
         u4 = self.upsample1(self.pool2(p4))
-        u5 = self.upsample2(self.pool3(p5))
+        #u5 = self.upsample2(self.pool3(p5))
 
-        h = u3 + u4 + u5
-        o1 = self.upsample3(h)
-
-        #p5.unchain.backward()
-        o2 = self.conv14(p5)
+        h = u3 + u4# + u5
+        o_fcn = self.upsample3(h)
 
         if FCN:
-            return o1
+            return o_fcn
         else:
-            return o2
+            return o_yolo
 
 class YOLOv2Predictor(Chain):
     def __init__(self, predictor):
@@ -78,7 +128,7 @@ class YOLOv2Predictor(Chain):
         self.unstable_seen = 5000
 
     def __call__(self, input_x, t, FCN=True, train=False):
-        output = self.predictor(input_x, FCN=FCN)
+        output = self.predictor(input_x, FCN=FCN, train=train)
         if FCN:
             if train:
                 loss = F.softmax_cross_entropy(output, t)
@@ -228,7 +278,7 @@ class YOLOv2Predictor(Chain):
             y_shift = Variable(np.broadcast_to(np.arange(grid_h, dtype=np.float32).reshape(grid_h, 1), y.shape))
             w_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 0], (self.predictor.n_boxes, 1, 1, 1)), w.shape))
             h_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 1], (self.predictor.n_boxes, 1, 1, 1)), h.shape))
-            x_shift.to_gpu(), y_shift.to_gpu(), w_anchor.to_gpu(), h_anchor.to_gpu()
+            x_shift.to_gpu(), y_shift.to_gpu(), w_anchor.to_gpu(), h_anchor.to_gpu() # need to comment out
             box_x = (x + x_shift) / grid_w
             box_y = (y + y_shift) / grid_h
             box_w = F.exp(w) * w_anchor / grid_w

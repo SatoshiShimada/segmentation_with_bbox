@@ -25,7 +25,9 @@ class DataSetFCN(object):
     def __init__(self):
         self.image_size = (640, 480)
         self.train_dataset = "/home/satoshi/chainer_fcn2/exact/images/"
+        self.train_dataset = "/home/satoshi/fcn/segd/gain/exact/images/"
         self.target_dataset = "/home/satoshi/chainer_fcn2/exact/labels/"
+        self.target_dataset = "/home/satoshi/fcn/segd/gain/exact/labels/"
         image_list = "image_list_fcn"
         with open(image_list, 'r') as fp:
             names = fp.readlines()
@@ -56,7 +58,7 @@ class DataSetYOLO(object):
         self.image_size = (640, 480)
         self.train_dataset = "/home/satoshi/2018_04_28/images/"
         self.target_dataset = "/home/satoshi/2018_04_28/labels/"
-        image_list = "image_list"
+        image_list = "image_list_yolo"
         with open(image_list, 'r') as fp:
             names = fp.readlines()
         self.data = []

@@ -4,14 +4,27 @@ from chainer.training import extensions
 from model import YOLOv2, YOLOv2Predictor
 from image_dataset import DatasetFCN
 
+class DelGradient(object):
+    name = 'DelGradient'
+    def __init__(self, del_target):
+        self.del_target = del_target
+
+    def __call__(self, opt):
+        for name, param in opt.target.namedparams():
+            for d in self.del_target:
+                if d in name:
+                    grad = param.grad
+                    with chainer.cuda.get_device(grad):
+                        grad = 0
+
 n_classes_fcn = 7
 n_classes_yolo = 2
 n_boxes = 5
 gpu = 0
-epoch = 2
+epoch = 100
 batchsize = 3
-out_path = 'result'
-initial_weight_file = None
+out_path = 'result/fcn-un5'
+initial_weight_file = 'result/yolo-segd4/model_snapshot_yolo_100'
 weight_decay = 1e-5
 test = False
 
@@ -21,9 +34,13 @@ if initial_weight_file:
     chainer.serializers.load_npz(initial_weight_file, model)
 
 optimizer = chainer.optimizers.Adam()
+#optimizer = chainer.optimizers.MomentumSGD(lr=1e-6)
 optimizer.setup(model)
 optimizer.use_cleargrads()
 optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
+target = [ "conv{}".format(i+1) for i in range(10) ] + [ "bn{}".format(i+1) for i in range(10) ] + [ "bias{}".format(i+1) for i in range(10) ]
+print(target)
+optimizer.add_hook(DelGradient(target))
 
 train_data = DatasetFCN()
 train_iter = chainer.iterators.SerialIterator(train_data, batchsize)

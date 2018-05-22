@@ -9,7 +9,7 @@ import chainer.functions as F
 from lib.utils import multi_box_iou
 from lib.utils import Box
 from lib.utils import box_iou
-from lib.functions import reorg
+from lib.reorg import reorg
 
 class YOLOv2(Chain):
     def __init__(self, n_classes_fcn, n_classes_yolo, n_boxes):

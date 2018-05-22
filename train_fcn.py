@@ -3,19 +3,7 @@ import chainer
 from chainer.training import extensions
 from model import YOLOv2, YOLOv2Predictor
 from image_dataset import DatasetFCN
-
-class DelGradient(object):
-    name = 'DelGradient'
-    def __init__(self, del_target):
-        self.del_target = del_target
-
-    def __call__(self, opt):
-        for name, param in opt.target.namedparams():
-            for d in self.del_target:
-                if d in name:
-                    grad = param.grad
-                    with chainer.cuda.get_device(grad):
-                        grad = 0
+from lib import DelGradient
 
 n_classes_fcn = 7
 n_classes_yolo = 2
@@ -27,6 +15,8 @@ out_path = 'result/fcn-un5'
 initial_weight_file = 'result/yolo-segd4/model_snapshot_yolo_100'
 weight_decay = 1e-5
 test = False
+clear_gradient_layer = 10
+snapshot_interval = 10
 
 yolov2 = YOLOv2(n_classes_fcn=n_classes_fcn, n_classes_yolo=n_classes_yolo, n_boxes=n_boxes)
 model = YOLOv2Predictor(yolov2, FCN=True)
@@ -38,7 +28,7 @@ optimizer = chainer.optimizers.Adam()
 optimizer.setup(model)
 optimizer.use_cleargrads()
 optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
-target = [ "conv{}".format(i+1) for i in range(10) ] + [ "bn{}".format(i+1) for i in range(10) ] + [ "bias{}".format(i+1) for i in range(10) ]
+target = [ "conv{}".format(i+1) for i in range(clear_gradient_layer) ] + [ "bn{}".format(i+1) for i in range(clear_gradient_layer) ] + [ "bias{}".format(i+1) for i in range(clear_gradient_layer) ]
 print(target)
 optimizer.add_hook(DelGradient(target))
 
@@ -55,7 +45,7 @@ if test:
     trainer.extend(extensions.Evaluator(test_iter, model, device=gpu))
 trainer.extend(extensions.LogReport(), trigger=(1, 'epoch'))
 trainer.extend(extensions.PrintReport(['epoch', 'main/loss', 'elapsed_time']), trigger=(1, 'epoch'))
-trainer.extend(extensions.snapshot_object(model, 'model_snapshot_fcn_{.updater.epoch}'), trigger=(10, 'epoch'))
+trainer.extend(extensions.snapshot_object(model, 'model_snapshot_fcn_{.updater.epoch}'), trigger=(snapshot_interval, 'epoch'))
 trainer.extend(extensions.ProgressBar(update_interval=10))
 
 trainer.run()

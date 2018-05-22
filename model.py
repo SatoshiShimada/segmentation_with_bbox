@@ -77,7 +77,7 @@ class YOLOv2(Chain):
         self.n_classes_yolo = n_classes_yolo
         self.finetune = False
 
-    def __call__(self, x, FCN=False, train=False):
+    def __call__(self, x, train=False):
         chainer.using_config('train', train)
         h = F.relu(self.bias1(self.bn1(self.conv1(x), finetune=self.finetune)))
         h = F.relu(self.bias2(self.bn2(self.conv2(h), finetune=self.finetune)))
@@ -116,10 +116,6 @@ class YOLOv2(Chain):
         o_fcn = self.upsample3(h)
 
         return o_fcn, o_yolo
-        if FCN:
-            return o_fcn
-        else:
-            return o_yolo
 
 class YOLOv2Predictor(Chain):
     def __init__(self, predictor, FCN=False):
@@ -270,13 +266,8 @@ class YOLOv2Predictor(Chain):
     def init_anchor(self, anchors):
         self.anchors = anchors
 
-    def predict(self, input_x):
-        output_fcn, output_yolo = self.predictor(input_x, FCN=self.FCN, train=False)
-        if self.FCN:
-            loss = F.softmax(output_fcn)
-            return loss
-        else:
-            output = output_yolo
+    def parse_yolo_output(self, input_x, yolo_output):
+            output = yolo_output
             batch_size, input_channel, input_h, input_w = input_x.shape
             batch_size, _, grid_h, grid_w = output.shape
             x, y, w, h, conf, prob = F.split_axis(F.reshape(output, (batch_size, self.predictor.n_boxes, self.predictor.n_classes_yolo+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
@@ -297,6 +288,17 @@ class YOLOv2Predictor(Chain):
             box_y = (y + y_shift) / grid_h
             box_w = F.exp(w) * w_anchor / grid_w
             box_h = F.exp(h) * h_anchor / grid_h
-
             return box_x, box_y, box_w, box_h, conf, prob
+
+    def predict(self, input_x, both=False):
+        output_fcn, output_yolo = self.predictor(input_x, train=False)
+        if both:
+            pred_fcn = F.softmax(output_fcn)
+            pred_yolo = self.parse_yolo_output(input_x, output_yolo)
+            return pred_fcn, pred_yolo
+        elif self.FCN:
+            loss = F.softmax(output_fcn)
+            return loss
+        else:
+            return self.parse_yolo_output(input_x, output_yolo)
 

@@ -1,8 +1,6 @@
 import numpy as np
 from PIL import Image
 from chainer import dataset
-import chainer
-import cupy
 
 def load_data(path, mode="label"):
     if mode == "label_fcn":
@@ -17,7 +15,6 @@ def load_data(path, mode="label"):
         for line in lines:
             data = line.replace('\n', '').split(' ')
             data = [ float(d) for d in data ]
-            #label, x, y, w, h = data
             ret.append(data)
         count = len(ret)
         while count < 10:
@@ -31,15 +28,19 @@ def load_data(path, mode="label"):
 
 class DatasetYOLO(dataset.DatasetMixin):
     def __init__(self):
-        self.train_dataset = "/home/satoshi/2018_04_28/images/"
-        self.target_dataset = "/home/satoshi/2018_04_28/labels/"
-        image_list = "image_list_yolo"
+        #self.train_dataset = "/home/satoshi/2018_04_28/images/"
+        #self.target_dataset = "/home/satoshi/2018_04_28/labels/"
+        #image_list = "image_list_yolo"
+        self.train_dataset = "/home/satoshi/chainer_fcn2/exact/images/"
+        self.target_dataset = "/home/satoshi/chainer_fcn2/exact/yolo/"
+        image_list = "image_list_fcn"
         with open(image_list, 'r') as fp:
             names = fp.readlines()
         self.data = []
         for name in names:
             name = name.replace('\n', '')
-            xpath = self.train_dataset + name + ".jpg"
+            #xpath = self.train_dataset + name + ".jpg"
+            xpath = self.train_dataset + name + ".png"
             ypath = self.target_dataset + name + ".txt"
             self.data.append((xpath, ypath))
 
@@ -50,24 +51,14 @@ class DatasetYOLO(dataset.DatasetMixin):
         xpath, ypath = self.data[i]
         x = load_data(xpath, mode="data")
         y = load_data(ypath, mode="label_yolo")
-        #ground_truth = []
-        #for t in y:
-        #    ground_truth.append({
-        #        "x": t[1],
-        #        "y": t[2],
-        #        "w": t[3],
-        #        "h": t[4],
-        #        "label": t[0],
-        #    })
-        #y = np.array(ground_truth)
         return x, y
 
 class DatasetFCN(dataset.DatasetMixin):
     def __init__(self):
         self.train_dataset = "/home/satoshi/chainer_fcn2/exact/images/"
-        self.train_dataset = "/home/satoshi/fcn/segd/gain/exact/images/"
+        #self.train_dataset = "/home/satoshi/fcn/segd/gain/exact/images/"
         self.target_dataset = "/home/satoshi/chainer_fcn2/exact/labels/"
-        self.target_dataset = "/home/satoshi/fcn/segd/gain/exact/labels/"
+        #self.target_dataset = "/home/satoshi/fcn/segd/gain/exact/labels/"
         image_list = "image_list_fcn"
         with open(image_list, 'r') as fp:
             names = fp.readlines()
@@ -77,7 +68,6 @@ class DatasetFCN(dataset.DatasetMixin):
             xpath = self.train_dataset + name + ".png"
             ypath = self.target_dataset + name + ".png"
             self.data.append((xpath, ypath))
-        self.num_data = len(self.data)
 
     def __len__(self):
         return len(self.data)

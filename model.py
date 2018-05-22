@@ -97,13 +97,13 @@ class YOLOv2(Chain):
         h = F.relu(self.bias10(self.bn10(self.conv10(h), finetune=self.finetune)))
         high_resolution_feature = reorg(h)
         p4 = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
+        #p4.unchain_backward()
 
         h = F.relu(self.bias11(self.bn11(self.conv11(p4), finetune=self.finetune)))
         h = F.relu(self.bias12(self.bn12(self.conv12(h), finetune=self.finetune)))
         h = F.relu(self.bias13(self.bn13(self.conv13(h), finetune=self.finetune)))
         #p5 = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
 
-        #h.unchain.backward()
         h = F.concat((high_resolution_feature, h), axis=1)
         h = F.relu(self.bias14(self.bn14(self.conv14(h), finetune=self.finetune)))
         o_yolo = self.conv15(h)
@@ -115,6 +115,7 @@ class YOLOv2(Chain):
         h = u3 + u4# + u5
         o_fcn = self.upsample3(h)
 
+        return o_fcn, o_yolo
         if FCN:
             return o_fcn
         else:
@@ -130,32 +131,30 @@ class YOLOv2Predictor(Chain):
         self.FCN = FCN
 
     def __call__(self, input_x, t, train=True):
-        output = self.predictor(input_x, FCN=self.FCN, train=train)
+        output_fcn, output_yolo = self.predictor(input_x, train=train)
         if self.FCN:
             if train:
-                loss = F.softmax_cross_entropy(output, t)
-                reporter.report({'loss': loss}, self)
-                return loss
+                loss_fcn = F.softmax_cross_entropy(output_fcn, t)
+                reporter.report({'loss': loss_fcn}, self)
+                return loss_fcn
             else:
-                loss = F.softmax(output)
+                loss = F.softmax(output_fcn)
                 return loss
-        batch_size, _, grid_h, grid_w = output.shape
+        batch_size, _, grid_h, grid_w = output_yolo.shape
         self.seen += batch_size
-        x, y, w, h, conf, prob = F.split_axis(F.reshape(output, (batch_size, self.predictor.n_boxes, self.predictor.n_classes_yolo+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
-        x = F.sigmoid(x) # xのactivation
-        y = F.sigmoid(y) # yのactivation
-        conf = F.sigmoid(conf) # confのactivation
+        x, y, w, h, conf, prob = F.split_axis(F.reshape(output_yolo, (batch_size, self.predictor.n_boxes, self.predictor.n_classes_yolo+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
+        x = F.sigmoid(x)
+        y = F.sigmoid(y)
+        conf = F.sigmoid(conf)
         prob = F.transpose(prob, (0, 2, 1, 3, 4))
-        prob = F.softmax(prob) # probablitiyのacitivation
+        prob = F.softmax(prob)
 
-
-        # 教師データの用意
         tw = np.zeros(w.shape, dtype=np.float32) # wとhが0になるように学習(e^wとe^hは1に近づく -> 担当するbboxの倍率1)
         th = np.zeros(h.shape, dtype=np.float32)
         tx = np.tile(0.5, x.shape).astype(np.float32) # 活性化後のxとyが0.5になるように学習()
         ty = np.tile(0.5, y.shape).astype(np.float32)
 
-        if self.seen < self.unstable_seen: # centerの存在しないbbox誤差学習スケールは基本0.1
+        if self.seen < self.unstable_seen:
             box_learning_scale = np.tile(0.1, x.shape).astype(np.float32)
         else:
             box_learning_scale = np.tile(0, x.shape).astype(np.float32)
@@ -264,9 +263,9 @@ class YOLOv2Predictor(Chain):
         reporter.report({'c_loss': F.sum(c_loss).data}, self)
         reporter.report({'p_loss': F.sum(p_loss).data}, self)
 
-        loss = x_loss + y_loss + w_loss + h_loss + c_loss + p_loss
-        reporter.report({'loss': loss}, self)
-        return loss
+        loss_yolo = x_loss + y_loss + w_loss + h_loss + c_loss + p_loss
+        reporter.report({'loss': loss_yolo}, self)
+        return loss_yolo
 
     def init_anchor(self, anchors):
         self.anchors = anchors

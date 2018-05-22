@@ -18,7 +18,7 @@ test = False
 yolov2 = YOLOv2(n_classes_fcn=n_classes_fcn, n_classes_yolo=n_classes_yolo, n_boxes=n_boxes)
 model = YOLOv2Predictor(yolov2, FCN=False)
 if initial_weight_file:
-    serializers.load_hdf5(initial_weight_file, model)
+    chainer.serializers.load_npz(initial_weight_file, model)
 
 optimizer = chainer.optimizers.Adam()
 optimizer.setup(model)

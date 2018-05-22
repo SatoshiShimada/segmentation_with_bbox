@@ -1,18 +1,18 @@
-# coding: utf-8
 import time
 import cv2
 import numpy as np
 from chainer import serializers, Variable
 import chainer.functions as F
 import argparse
-from custom_yolov2 import *
+from model import YOLOv2, YOLOv2Predictor
 from lib.utils import nms
+from lib.utils import Box
 
 fcn = False
-class AnimalPredictor:
+class Predictor:
     def __init__(self):
         # hyper parameters
-        weight_file = "./backup/yolov2_final.model"
+        weight_file = "./weight/model_snapshot_fcn_300"
         self.n_classes_fcn = 7
         self.n_classes_yolo = 2
         self.n_boxes = 5
@@ -23,10 +23,9 @@ class AnimalPredictor:
             self.labels = f.read().strip().split("\n")
 
         # load model
-        print("loading animal model...")
         yolov2 = YOLOv2(n_classes_fcn=self.n_classes_fcn, n_classes_yolo=self.n_classes_yolo, n_boxes=self.n_boxes)
-        model = YOLOv2Predictor(yolov2)
-        serializers.load_hdf5(weight_file, model) # load saved model
+        model = YOLOv2Predictor(yolov2, FCN=fcn)
+        serializers.load_npz(weight_file, model)
         self.model = model
 
     def __call__(self, img):
@@ -40,7 +39,7 @@ class AnimalPredictor:
         # forward
         x_data = img[np.newaxis, :, :, :]
         x = Variable(x_data)
-        x, y, w, h, conf, prob = self.model.predict(x, FCN=fcn)
+        x, y, w, h, conf, prob = self.model.predict(x)
 
         # parse results
         _, _, _, grid_h, grid_w = x.shape
@@ -72,16 +71,15 @@ class AnimalPredictor:
 
 if __name__ == "__main__":
     # argument parse
-    parser = argparse.ArgumentParser(description="指定したパスの画像を読み込み、bbox及びクラスの予測を行う")
-    parser.add_argument('path', help="画像ファイルへのパスを指定")
+    parser = argparse.ArgumentParser(description="predict image")
+    parser.add_argument('path', help="input image path")
     args = parser.parse_args()
     image_file = args.path
 
     # read image
-    print("loading image...")
     orig_img = cv2.imread(image_file)
 
-    predictor = AnimalPredictor()
+    predictor = Predictor()
     nms_results = predictor(orig_img)
 
     # draw result
@@ -98,3 +96,4 @@ if __name__ == "__main__":
         cv2.putText(orig_img, text, (left, top-6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         print(text)
     cv2.imwrite('out.png', orig_img)
+

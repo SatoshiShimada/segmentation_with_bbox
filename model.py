@@ -271,11 +271,12 @@ class YOLOv2Predictor(Chain):
         self.anchors = anchors
 
     def predict(self, input_x):
-        output = self.predictor(input_x, FCN=self.FCN, train=False)
+        output_fcn, output_yolo = self.predictor(input_x, FCN=self.FCN, train=False)
         if self.FCN:
-            loss = F.softmax(output)
+            loss = F.softmax(output_fcn)
             return loss
         else:
+            output = output_yolo
             batch_size, input_channel, input_h, input_w = input_x.shape
             batch_size, _, grid_h, grid_w = output.shape
             x, y, w, h, conf, prob = F.split_axis(F.reshape(output, (batch_size, self.predictor.n_boxes, self.predictor.n_classes_yolo+5, grid_h, grid_w)), (1, 2, 3, 4, 5), axis=2)
@@ -291,7 +292,7 @@ class YOLOv2Predictor(Chain):
             y_shift = Variable(np.broadcast_to(np.arange(grid_h, dtype=np.float32).reshape(grid_h, 1), y.shape))
             w_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 0], (self.predictor.n_boxes, 1, 1, 1)), w.shape))
             h_anchor = Variable(np.broadcast_to(np.reshape(np.array(self.anchors, dtype=np.float32)[:, 1], (self.predictor.n_boxes, 1, 1, 1)), h.shape))
-            x_shift.to_gpu(), y_shift.to_gpu(), w_anchor.to_gpu(), h_anchor.to_gpu() # !!!need to comment out when using cpu!!!
+            #x_shift.to_gpu(), y_shift.to_gpu(), w_anchor.to_gpu(), h_anchor.to_gpu() # !!!need to comment out when using cpu!!!
             box_x = (x + x_shift) / grid_w
             box_y = (y + y_shift) / grid_h
             box_w = F.exp(w) * w_anchor / grid_w

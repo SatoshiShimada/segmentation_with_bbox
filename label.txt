@@ -1,0 +1,5 @@
+ball
+goal
+dummy
+dummy
+dummy

@@ -14,6 +14,9 @@ from color_map import make_color_map
 
 color_map = make_color_map()
 
+chainer.using_config('train', False)
+chainer.using_config('enable_backprop', False)
+
 fcn = False
 class Predictor:
     def __init__(self, gpu=0):

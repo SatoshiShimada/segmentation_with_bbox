@@ -4,6 +4,7 @@ import argparse
 import cv2
 from PIL import Image
 import numpy as np
+import chainer
 from chainer import serializers, Variable, cuda
 import chainer.functions as F
 
@@ -19,9 +20,8 @@ chainer.using_config('enable_backprop', False)
 
 fcn = False
 class Predictor:
-    def __init__(self, gpu=0):
+    def __init__(self, gpu=0, weight=None):
         # hyper parameters
-        weight_file = "./weight/fcn-un4-100"
         self.n_classes_fcn = 7
         self.n_classes_yolo = 2
         self.n_boxes = 5
@@ -34,7 +34,8 @@ class Predictor:
         # load model
         yolov2 = YOLOv2(n_classes_fcn=self.n_classes_fcn, n_classes_yolo=self.n_classes_yolo, n_boxes=self.n_boxes)
         model = YOLOv2Predictor(yolov2, FCN=fcn)
-        serializers.load_npz(weight_file, model)
+        if weight:
+            serializers.load_npz(weight, model)
         if gpu >= 0:
             cuda.get_device(gpu).use()
             model.to_gpu()
@@ -103,13 +104,14 @@ if __name__ == "__main__":
     parser.add_argument('--gpu', default=0, type=int)
     parser.add_argument('--path', help="input image path")
     parser.add_argument('--classes', default=7, type=int)
+    parser.add_argument('--weight', default='weight.npz', type=str)
     args = parser.parse_args()
     image_file = args.path
 
     # read image
     orig_img = cv2.imread(image_file)
 
-    predictor = Predictor(gpu=args.gpu)
+    predictor = Predictor(gpu=args.gpu, weight=args.weight)
     pred_fcn, nms_results = predictor(orig_img)
 
     # FCN

@@ -25,7 +25,6 @@ class Predictor:
         self.n_classes_fcn = 7
         self.n_classes_yolo = 2
         self.n_boxes = 5
-        self.detection_thresh = 0.2
         self.iou_thresh = 0.1
         self.label_file = "./label.txt"
         with open(self.label_file, "r") as f:
@@ -42,7 +41,8 @@ class Predictor:
         self.model = model
         self.gpu = gpu
 
-    def __call__(self, img):
+    def __call__(self, img, threshold=0.2):
+        self.detection_thresh = threshold
         orig_input_height, orig_input_width, _ = img.shape
         #img = cv2.resize(orig_img, (640, 640))
         input_height, input_width, _ = img.shape
@@ -105,6 +105,7 @@ if __name__ == "__main__":
     parser.add_argument('--path', help="input image path")
     parser.add_argument('--classes', default=7, type=int)
     parser.add_argument('--weight', default='weight.npz', type=str)
+    parser.add_argument('--threshold', default=0.2, type=float)
     args = parser.parse_args()
     image_file = args.path
 
@@ -112,7 +113,7 @@ if __name__ == "__main__":
     orig_img = cv2.imread(image_file)
 
     predictor = Predictor(gpu=args.gpu, weight=args.weight)
-    pred_fcn, nms_results = predictor(orig_img)
+    pred_fcn, nms_results = predictor(orig_img, threshold=args.threshold)
 
     # FCN
     row, col = pred_fcn.shape

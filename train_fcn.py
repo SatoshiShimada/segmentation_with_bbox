@@ -1,17 +1,17 @@
 import numpy as np
 import chainer
 from chainer.training import extensions
-from model import YOLOv2, YOLOv2Predictor
+from tiny_model import YOLOv2, YOLOv2Predictor
 from image_dataset import DatasetFCN
 
 n_classes_fcn = 7
 n_classes_yolo = 2
 n_boxes = 5
-gpu = 0
-epoch = 100
+gpu = 1
+epoch = 500
 batchsize = 3
-out_path = 'result/fcn-v5/'
-initial_weight_file = 'result/fcn-v4/final.npz'
+out_path = 'result/fcn-x4/'
+initial_weight_file = 'result/yolo-x3/final.npz'
 weight_decay = 1e-5
 test = False
 snapshot_interval = 10
@@ -24,7 +24,7 @@ if initial_weight_file:
 optimizer = chainer.optimizers.Adam()
 optimizer.setup(model)
 optimizer.use_cleargrads()
-#optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
+optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
 
 train_data = DatasetFCN()
 train_iter = chainer.iterators.SerialIterator(train_data, batchsize)

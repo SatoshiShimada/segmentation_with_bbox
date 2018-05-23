@@ -17,7 +17,8 @@ def load_data(path, mode="label"):
             data = [ float(d) for d in data ]
             ret.append(data)
         count = len(ret)
-        while count < 10:
+        max_object_num = 4
+        while count < max_object_num:
             ret.append((10.0, 0.0, 0.0, 0.0, 0.0))
             count += 1
         return np.array(ret, dtype=np.float32)

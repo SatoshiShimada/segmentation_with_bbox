@@ -1,7 +1,7 @@
 import numpy as np
 import chainer
 from chainer.training import extensions
-from model import YOLOv2, YOLOv2Predictor
+from tiny_model import YOLOv2, YOLOv2Predictor
 from image_dataset import DatasetYOLO
 
 n_classes_fcn = 7
@@ -10,8 +10,8 @@ n_boxes = 5
 gpu = 0
 epoch = 100
 batchsize = 3
-out_path = 'result/yolo-ref5/'
-initial_weight_file = 'result/fcn-v2/final.npz'
+out_path = 'result/yolo-x5/'
+initial_weight_file = 'result/fcn-x4/final.npz'
 weight_decay = 1e-5
 test = False
 snapshot_interval = 100

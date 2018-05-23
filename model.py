@@ -97,7 +97,6 @@ class YOLOv2(Chain):
         h = F.relu(self.bias10(self.bn10(self.conv10(h), finetune=self.finetune)))
         high_resolution_feature = reorg(h)
         p4 = F.max_pooling_2d(h, ksize=2, stride=2, pad=0)
-        #p4.unchain_backward()
 
         h = F.relu(self.bias11(self.bn11(self.conv11(p4), finetune=self.finetune)))
         h = F.relu(self.bias12(self.bn12(self.conv12(h), finetune=self.finetune)))
@@ -114,6 +113,7 @@ class YOLOv2(Chain):
 
         h = u3 + u4# + u5
         o_fcn = self.upsample3(h)
+        o_fcn.unchain_backward()
 
         return o_fcn, o_yolo
 

@@ -3,7 +3,6 @@ import chainer
 from chainer.training import extensions
 from model import YOLOv2, YOLOv2Predictor
 from image_dataset import DatasetYOLO
-from lib.delete_gradient import DelGradient
 
 n_classes_fcn = 7
 n_classes_yolo = 2
@@ -11,11 +10,10 @@ n_boxes = 5
 gpu = 0
 epoch = 100
 batchsize = 3
-out_path = 'result/yolo-ref1/'
-initial_weight_file = 'final.npz'
+out_path = 'result/yolo-ref5/'
+initial_weight_file = 'result/fcn-v2/final.npz'
 weight_decay = 1e-5
 test = False
-clear_gradient_layer = 10
 snapshot_interval = 100
 
 yolov2 = YOLOv2(n_classes_fcn=n_classes_fcn, n_classes_yolo=n_classes_yolo, n_boxes=n_boxes)
@@ -24,13 +22,9 @@ if initial_weight_file:
     chainer.serializers.load_npz(initial_weight_file, model)
 
 optimizer = chainer.optimizers.Adam()
-#optimizer = chainer.optimizers.MomentumSGD(lr=1e-6)
 optimizer.setup(model)
 optimizer.use_cleargrads()
-optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
-target = [ "conv{}".format(i+1) for i in range(clear_gradient_layer) ] + [ "bn{}".format(i+1) for i in range(clear_gradient_layer) ] + [ "bias{}".format(i+1) for i in range(clear_gradient_layer) ]
-print(target)
-optimizer.add_hook(DelGradient(target))
+#optimizer.add_hook(chainer.optimizer.WeightDecay(weight_decay))
 
 train_data = DatasetYOLO()
 train_iter = chainer.iterators.SerialIterator(train_data, batchsize)

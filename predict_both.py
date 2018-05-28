@@ -8,7 +8,7 @@ import chainer
 from chainer import serializers, Variable, cuda
 import chainer.functions as F
 
-from model import YOLOv2, YOLOv2Predictor
+from tiny_model import YOLOv2, YOLOv2Predictor
 from lib.utils import nms
 from lib.utils import Box
 from color_map import make_color_map

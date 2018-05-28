@@ -8,7 +8,7 @@ import chainer
 from chainer import serializers, Variable, cuda
 import chainer.functions as F
 
-from model import YOLOv2, YOLOv2Predictor
+from tiny_model import YOLOv2, YOLOv2Predictor
 from lib.utils import nms
 from lib.utils import Box
 from color_map import make_color_map
@@ -45,7 +45,6 @@ class Predictor:
     def __call__(self, img):
         orig_input_height, orig_input_width, _ = img.shape
         #img = cv2.resize(orig_img, (640, 640))
-        input_height, input_width, _ = img.shape
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = np.asarray(img, dtype=np.float32) / 255.0
         img = img.transpose(2, 0, 1)
@@ -116,8 +115,8 @@ if __name__ == "__main__":
         if not 'png' in image_file:
             continue
         print(image_file)
-        orig_img = cv2.imread(args.path + image_file)
-        #orig_img = cv2.resize(orig_img, (240, 320))
+        ooo = cv2.imread(args.path + image_file)
+        orig_img = cv2.resize(ooo, (320, 240))
 
         start_time = time.time()
         pred_fcn, nms_results = predictor(orig_img)
@@ -149,11 +148,14 @@ if __name__ == "__main__":
             os.mkdir("out")
         trans.save("out/pred.png")
 
-        o = cv2.imread(args.path + image_file, 1)
-        p = cv2.imread("out/pred.png", 1)
+        oo = cv2.imread(args.path + image_file, 1)
+        pp = cv2.imread("out/pred.png", 1)
+        o = cv2.resize(oo, (320, 240))
+        p = cv2.resize(pp, (320, 240))
         os.remove("out/pred.png")
 
         fcn_img = cv2.addWeighted(o, 0.4, p, 0.6, 0.0)
+        cv2.imwrite('out/' + image_file, fcn_img)
 
         # draw YOLO result
         print(len(nms_results))
